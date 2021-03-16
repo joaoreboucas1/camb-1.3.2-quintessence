@@ -72,8 +72,8 @@
         real(dl) :: f =0.05 ! sqrt(8*pi*G)*f
         real(dl) :: m = 5d-54 !m in reduced Planck mass units
         real(dl) :: theta_i = 3.1_dl !initial value of phi/f
-        real(dl) :: frac_lambda0 = 1._dl !fraction of dark energy density that is cosmological constant today, I think I can put zero!
-        logical :: use_zc = .true. !adjust m to fit zc
+        real(dl) :: frac_lambda0 = 0._dl !fraction of dark energy density that is cosmological constant today, I think I can put zero!
+        logical :: use_zc = .false. !adjust m to fit zc
         real(dl) :: zc, fde_zc !readshift for peak f_de and f_de at that redshift
         integer :: npoints = 5000 !baseline number of log a steps; will be increased if needed when there are oscillations
         integer :: min_steps_per_osc = 10
@@ -96,6 +96,7 @@
     public TQuintessence, TEarlyQuintessence
     contains
 
+	! This is unused
     function VofPhi(this, phi, deriv)
     !Get the quintessence potential as function of phi
     !The input variable phi is sqrt(8*Pi*G)*psi, where psi is the field
@@ -376,31 +377,31 @@
     call this%TQuintessence%Init(State) ! This does 4 things: pass the State inside, sets num_perturb_equations = 2, set is_cosmological_constant = .false.
 	! and passes astart inside. Should keep this here
 
-    if (this%use_zc) then ! I think I won't need this if completely
-        !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
-        !Input m,f are used as starting values for search, which is done by brute force
-        !(so should generalize easily, but not optimized for this specific potential)
-        log_params(1) = log(this%f)
-        log_params(2) = log(this%m)
-
-        if (.false.) then 
-            ! Can just iterate linear optimizations when nearly orthogonal
-            call Timer%Start()
-            do iter = 1, 2
-                call brentq(this,match_fde,log(0.01_dl),log(10._dl), 1d-3,xzero,fzero,iflag)
-                if (iflag/=0) print *, 'BRENTQ FAILED f'
-                this%f = exp(xzero)
-                print *, 'match to m, f =', this%m, this%f, fzero
-                call brentq(this,match_zc,log(1d-55),log(1d-52), 1d-3,xzero,fzero,iflag)
-                if (iflag/=0) print *, 'BRENTQ FAILED m'
-                this%m = exp(xzero)
-                print *, 'match to m, f =', this%m, this%f, fzero
-                call this%calc_zc_fde(fzero, xzero)
-                print *, 'matched outputs', fzero, xzero
-            end do
-            call Timer%WriteTime('Timing for fitting')
-        end if
-        if (this%DebugLevel>0) call Timer%Start()
+    !if (this%use_zc) then ! I think I won't need this if completely - I was right!!
+    !    !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
+    !    !Input m,f are used as starting values for search, which is done by brute force
+    !    !(so should generalize easily, but not optimized for this specific potential)
+    !    log_params(1) = log(this%f)
+    !    log_params(2) = log(this%m)
+!
+     !   if (.false.) then 
+     !       ! Can just iterate linear optimizations when nearly orthogonal
+     !       call Timer%Start()
+     !       do iter = 1, 2
+     !           call brentq(this,match_fde,log(0.01_dl),log(10._dl), 1d-3,xzero,fzero,iflag)
+     !           if (iflag/=0) print *, 'BRENTQ FAILED f'
+     !           this%f = exp(xzero)
+     !           print *, 'match to m, f =', this%m, this%f, fzero
+     !           call brentq(this,match_zc,log(1d-55),log(1d-52), 1d-3,xzero,fzero,iflag)
+     !           if (iflag/=0) print *, 'BRENTQ FAILED m'
+     !           this%m = exp(xzero)
+     !           print *, 'match to m, f =', this%m, this%f, fzero
+     !           call this%calc_zc_fde(fzero, xzero)
+     !           print *, 'matched outputs', fzero, xzero
+     !       end do
+     !       call Timer%WriteTime('Timing for fitting')
+        !end if
+        !if (this%DebugLevel>0) call Timer%Start()
         !Minimize in log f, log m
         ! param_min(1) = log(0.001_dl)
         ! param_min(2) = log(1d-58)
@@ -409,28 +410,28 @@
         ! if (Minimize%BOBYQA(this, match_fde_zc, 2, 5, log_params,param_min, &
         !           param_max, 0.8_dl,1e-4_dl,this%DebugLevel,2000)) then
 
-        if (Minimize%NEWUOA(this, match_fde_zc, 2, 5, log_params,&
-            0.8_dl,1e-4_dl,this%DebugLevel,500)) then
+        !if (Minimize%NEWUOA(this, match_fde_zc, 2, 5, log_params,&
+        !    0.8_dl,1e-4_dl,this%DebugLevel,500)) then
 
-            if (Minimize%Last_bestfit > 1e-3) then
-                global_error_flag = error_darkenergy
-                global_error_message= 'TEarlyQuintessence ERROR converging solution for fde, zc'
-                write(*,*) 'last-bestfit= ', Minimize%Last_bestfit
-                return
-            end if
-            this%f = exp(log_params(1))
-            this%m = exp(log_params(2))
-            if (this%DebugLevel>0) then
-                call this%calc_zc_fde(fzero, xzero)
-                write(*,*) 'matched outputs Bobyqa zc, fde = ', fzero, xzero
-            end if
-        else
-            global_error_flag = error_darkenergy
-            global_error_message= 'TEarlyQuintessence ERROR finding solution for fde, zc'
-            return
-        end if
-        if (this%DebugLevel>0) call Timer%WriteTime('Timing for parameter fitting')
-    end if
+        !    if (Minimize%Last_bestfit > 1e-3) then
+        !        global_error_flag = error_darkenergy
+        !        global_error_message= 'TEarlyQuintessence ERROR converging solution for fde, zc'
+        !        write(*,*) 'last-bestfit= ', Minimize%Last_bestfit
+        !        return
+        !    end if
+        !    this%f = exp(log_params(1))
+        !    this%m = exp(log_params(2))
+        !    if (this%DebugLevel>0) then
+        !        call this%calc_zc_fde(fzero, xzero)
+        !        write(*,*) 'matched outputs Bobyqa zc, fde = ', fzero, xzero
+        !    end if
+        !else
+        !    global_error_flag = error_darkenergy
+        !    global_error_message= 'TEarlyQuintessence ERROR finding solution for fde, zc'
+        !    return
+        !end if
+        !if (this%DebugLevel>0) call Timer%WriteTime('Timing for parameter fitting')
+    !end if
 
     this%dloga = (-this%log_astart)/(this%npoints-1)
 
