@@ -78,6 +78,8 @@
         integer :: npoints = 5000 !baseline number of log a steps; will be increased if needed when there are oscillations
         integer :: min_steps_per_osc = 10
         real(dl), dimension(:), allocatable :: fde, ddfde
+		logical :: output_background_phi ! If you want to output the background field evolution in file
+		character(len=50) :: output_background_phi_filename ! The name of the file for field output
     contains
     procedure :: Vofphi => TEarlyQuintessence_VofPhi
     procedure :: Init => TEarlyQuintessence_Init
@@ -369,39 +371,37 @@
     Type(TNEWUOA) :: Minimize
     real(dl) log_params(2), param_min(2), param_max(2)
 
-    !This routine initializes some of the variables in TEarlyQuintessence
-	!and precomputes an interpolation table for phi, phidot since this is needed to find the correct initial condition
+    !Make interpolation table, etc,
     !At this point massive neutrinos have been initialized
     !so grho_no_de can be used to get density and pressure of other components at scale factor a
 
-    call this%TQuintessence%Init(State) ! This does 4 things: pass the State inside, sets num_perturb_equations = 2, set is_cosmological_constant = .false.
-	! and passes astart inside. Should keep this here
+    call this%TQuintessence%Init(State)
 
-    !if (this%use_zc) then ! I think I won't need this if completely - I was right!!
-    !    !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
-    !    !Input m,f are used as starting values for search, which is done by brute force
-    !    !(so should generalize easily, but not optimized for this specific potential)
-    !    log_params(1) = log(this%f)
-    !    log_params(2) = log(this%m)
-!
-     !   if (.false.) then 
-     !       ! Can just iterate linear optimizations when nearly orthogonal
-     !       call Timer%Start()
-     !       do iter = 1, 2
-     !           call brentq(this,match_fde,log(0.01_dl),log(10._dl), 1d-3,xzero,fzero,iflag)
-     !           if (iflag/=0) print *, 'BRENTQ FAILED f'
-     !           this%f = exp(xzero)
-     !           print *, 'match to m, f =', this%m, this%f, fzero
-     !           call brentq(this,match_zc,log(1d-55),log(1d-52), 1d-3,xzero,fzero,iflag)
-     !           if (iflag/=0) print *, 'BRENTQ FAILED m'
-     !           this%m = exp(xzero)
-     !           print *, 'match to m, f =', this%m, this%f, fzero
-     !           call this%calc_zc_fde(fzero, xzero)
-     !           print *, 'matched outputs', fzero, xzero
-     !       end do
-     !       call Timer%WriteTime('Timing for fitting')
-        !end if
-        !if (this%DebugLevel>0) call Timer%Start()
+    if (this%use_zc) then
+        !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
+        !Input m,f are used as starting values for search, which is done by brute force
+        !(so should generalize easily, but not optimized for this specific potential)
+        log_params(1) = log(this%f)
+        log_params(2) = log(this%m)
+
+        if (.false.) then
+            ! Can just iterate linear optimizations when nearly orthogonal
+            call Timer%Start()
+            do iter = 1, 2
+                call brentq(this,match_fde,log(0.01_dl),log(10._dl), 1d-3,xzero,fzero,iflag)
+                if (iflag/=0) print *, 'BRENTQ FAILED f'
+                this%f = exp(xzero)
+                print *, 'match to m, f =', this%m, this%f, fzero
+                call brentq(this,match_zc,log(1d-55),log(1d-52), 1d-3,xzero,fzero,iflag)
+                if (iflag/=0) print *, 'BRENTQ FAILED m'
+                this%m = exp(xzero)
+                print *, 'match to m, f =', this%m, this%f, fzero
+                call this%calc_zc_fde(fzero, xzero)
+                print *, 'matched outputs', fzero, xzero
+            end do
+            call Timer%WriteTime('Timing for fitting')
+        end if
+        if (this%DebugLevel>0) call Timer%Start()
         !Minimize in log f, log m
         ! param_min(1) = log(0.001_dl)
         ! param_min(2) = log(1d-58)
@@ -410,28 +410,28 @@
         ! if (Minimize%BOBYQA(this, match_fde_zc, 2, 5, log_params,param_min, &
         !           param_max, 0.8_dl,1e-4_dl,this%DebugLevel,2000)) then
 
-        !if (Minimize%NEWUOA(this, match_fde_zc, 2, 5, log_params,&
-        !    0.8_dl,1e-4_dl,this%DebugLevel,500)) then
+        if (Minimize%NEWUOA(this, match_fde_zc, 2, 5, log_params,&
+            0.8_dl,1e-4_dl,this%DebugLevel,500)) then
 
-        !    if (Minimize%Last_bestfit > 1e-3) then
-        !        global_error_flag = error_darkenergy
-        !        global_error_message= 'TEarlyQuintessence ERROR converging solution for fde, zc'
-        !        write(*,*) 'last-bestfit= ', Minimize%Last_bestfit
-        !        return
-        !    end if
-        !    this%f = exp(log_params(1))
-        !    this%m = exp(log_params(2))
-        !    if (this%DebugLevel>0) then
-        !        call this%calc_zc_fde(fzero, xzero)
-        !        write(*,*) 'matched outputs Bobyqa zc, fde = ', fzero, xzero
-        !    end if
-        !else
-        !    global_error_flag = error_darkenergy
-        !    global_error_message= 'TEarlyQuintessence ERROR finding solution for fde, zc'
-        !    return
-        !end if
-        !if (this%DebugLevel>0) call Timer%WriteTime('Timing for parameter fitting')
-    !end if
+            if (Minimize%Last_bestfit > 1e-3) then
+                global_error_flag = error_darkenergy
+                global_error_message= 'TEarlyQuintessence ERROR converging solution for fde, zc'
+                write(*,*) 'last-bestfit= ', Minimize%Last_bestfit
+                return
+            end if
+            this%f = exp(log_params(1))
+            this%m = exp(log_params(2))
+            if (this%DebugLevel>0) then
+                call this%calc_zc_fde(fzero, xzero)
+                write(*,*) 'matched outputs Bobyqa zc, fde = ', fzero, xzero
+            end if
+        else
+            global_error_flag = error_darkenergy
+            global_error_message= 'TEarlyQuintessence ERROR finding solution for fde, zc'
+            return
+        end if
+        if (this%DebugLevel>0) call Timer%WriteTime('Timing for parameter fitting')
+    end if
 
     this%dloga = (-this%log_astart)/(this%npoints-1)
 
@@ -445,9 +445,6 @@
     end if
     allocate(phi_a(npoints),phidot_a(npoints), sampled_a(npoints), fde(npoints))
 
-	!This code block can be very useful to adjust initial_phi to set sum(Omega_i) = 1. I can ignore this for now to put the code to work
-	!but after I will need to check if the background evolution satisfies the condition above.
-	
     !initial_phi  = 10  !  0.3*grhom/m**3
     !initial_phi2 = 100 !   6*grhom/m**3
     !
@@ -496,7 +493,7 @@
     !
     !end if !Find initial
 
-    initial_phi = this%theta_i*this%f ! Initial condition!! Maybe at first I can ignore everything else, assign some value to it and check if the code works.
+    initial_phi = this%theta_i*this%f
 
     y(1)=initial_phi
     initial_phidot =  this%astart*this%phidot_start(initial_phi)
@@ -511,7 +508,13 @@
 
     ind=1
     afrom=this%log_astart
-    do i=1, npoints-1 ! Evolve background logarithmically in a
+
+	! Modifying to output background phi(a)
+	if (this%output_background_phi .eqv. .true.) then
+		open(unit=50, file=this%output_background_phi_filename, form='formatted', status='replace')
+		write(50, *) "a		phi		phidot		fde"
+	end if
+    do i=1, npoints-1
         aend = this%log_astart + this%dloga*i
         ix = i+1
         sampled_a(ix)=exp(aend)
@@ -521,6 +524,8 @@
         call EvolveBackgroundLog(this,NumEqs,aend,y,w(:,1))
         phi_a(ix)=y(1)
         phidot_a(ix)=y(2)/a2
+
+		! I think I don't need this if
         if (i==1) then
             lastsign = y(2)
         elseif (y(2)*lastsign < 0) then
@@ -530,16 +535,23 @@
             lastsign= y(2)
         end if
 
-        !Define fde as ratio of early dark energy density to total, this expression can be useful!!
+        !Define fde as ratio of early dark energy density to total
         fde(ix) = 1/((this%state%grho_no_de(sampled_a(ix)) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
         if (max_ix==0 .and. ix > 2 .and. fde(ix)< fde(ix-1)) then
             max_ix = ix-1
         end if
+
+		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
+			write(50, '(4e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix)
+		end if
+		
+		! Also won't need this if
         if (sampled_a(ix)*(exp(this%dloga)-1)*this%min_steps_per_osc > da_osc) then
             !Step size getting too big to sample oscillations well
             exit
         end if
+
     end do
 
     ! Do remaining steps with linear spacing in a, trying to be small enough
@@ -555,9 +567,9 @@
     allocate(this%ddphi_a(tot_points),this%ddphidot_a(tot_points))
     allocate(this%sampled_a(tot_points), this%fde(tot_points), this%ddfde(tot_points))
     this%sampled_a(1:ix) = sampled_a(1:ix)
-    this%phi_a(1:ix) = phi_a(1:ix) ! Passing initial value of phi there!
-    this%phidot_a(1:ix) = phidot_a(1:ix) ! Passing initial value of phidot there!
-    this%sampled_a(1:ix) = sampled_a(1:ix) ! why this again?
+    this%phi_a(1:ix) = phi_a(1:ix)
+    this%phidot_a(1:ix) = phidot_a(1:ix)
+    this%sampled_a(1:ix) = sampled_a(1:ix)
     this%fde(1:ix) = fde(1:ix)
 
     ind=1
@@ -575,16 +587,17 @@
 
         this%fde(ix) = 1/((this%state%grho_no_de(aend) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
+
+		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
+			write(50, '(4e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix)
+		end if
+
         if (max_ix==0 .and. this%fde(ix)< this%fde(ix-1)) then
             max_ix = ix-1
         end if
     end do
 
-	! The spline function has the following syntax: spline(x, y, n, derivative_at_startpoint, derivative_at_endpoint, second_derivatives)
-	! x and y are arrays containing n elements, so we have n points (x,y) to interpolate. The four first variables are intent(in)
-	! second_derivatives is an intent(out) variable containing the second derivatives of y(x) at x.
-	! This is used to construct a spline interpolation to the function. (See Wikipedia article for interpolation, section General Expression for a C^2 Cubic Spline)
-    call spline(this%sampled_a,this%phi_a,tot_points,splZero,splZero,this%ddphi_a) ! ddphi_a is an array with the second derivatives d^2(phi)/d(lna) to spline
+    call spline(this%sampled_a,this%phi_a,tot_points,splZero,splZero,this%ddphi_a)
     call spline(this%sampled_a,this%phidot_a,tot_points,splZero,splZero,this%ddphidot_a)
     call spline(this%sampled_a,this%fde,tot_points,splZero,splZero,this%ddfde)
     has_peak = .false.
@@ -795,6 +808,9 @@
 	! Print here to test if works
 	print *, "Potential type:", quintessence%potential_type
 	print *, "Parameter 1:", quintessence%potentialparams(1)
+
+	quintessence%output_background_field = Ini%Read_Logical('output_scalarfield')
+	quintessence%output_background_phi_filename = Ini%Read_String('output_scalarfield_filename')
 
     end subroutine field_getpotentialparams
 

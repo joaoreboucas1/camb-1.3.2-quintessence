@@ -65,6 +65,8 @@
         integer :: npoints = 5000 !baseline number of log a steps; will be increased if needed when there are oscillations
         integer :: min_steps_per_osc = 10
         real(dl), dimension(:), allocatable :: fde, ddfde
+		logical :: output_background_phi = .true. ! If the code should output a file with the scalar field evolution, phi(a).
+		character(len=50) :: output_background_phi_filename
     contains
     procedure :: Vofphi => TEarlyQuintessence_VofPhi
     procedure :: Init => TEarlyQuintessence_Init
@@ -454,6 +456,12 @@
 
     ind=1
     afrom=this%log_astart
+
+	! Modifying to output background phi(a)
+	if (this%output_background_phi .eqv. .true.) then
+		open(unit=50, file=this%output_background_phi_filename, form='formatted', status='replace')
+		write(50, *) "a		phi		phidot		fde"
+	end if
     do i=1, npoints-1
         aend = this%log_astart + this%dloga*i
         ix = i+1
@@ -464,6 +472,8 @@
         call EvolveBackgroundLog(this,NumEqs,aend,y,w(:,1))
         phi_a(ix)=y(1)
         phidot_a(ix)=y(2)/a2
+
+		! I think I don't need this if
         if (i==1) then
             lastsign = y(2)
         elseif (y(2)*lastsign < 0) then
@@ -479,10 +489,17 @@
         if (max_ix==0 .and. ix > 2 .and. fde(ix)< fde(ix-1)) then
             max_ix = ix-1
         end if
+
+		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
+			write(50, '(4e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix)
+		end if
+		
+		! Also won't need this if
         if (sampled_a(ix)*(exp(this%dloga)-1)*this%min_steps_per_osc > da_osc) then
             !Step size getting too big to sample oscillations well
             exit
         end if
+
     end do
 
     ! Do remaining steps with linear spacing in a, trying to be small enough
@@ -518,6 +535,11 @@
 
         this%fde(ix) = 1/((this%state%grho_no_de(aend) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
+
+		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
+			write(50, '(4e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix)
+		end if
+
         if (max_ix==0 .and. this%fde(ix)< this%fde(ix-1)) then
             max_ix = ix-1
         end if
@@ -724,6 +746,10 @@
     class(TIniFile), intent(in) :: Ini
 
     call this%TDarkEnergyModel%ReadParams(Ini)
+
+	this%output_background_phi = Ini%Read_Logical('output_scalarfield')
+	print *, "Ini file read successfully, output_scalarfield is", this%output_background_phi
+	this%output_background_phi_filename = Ini%Read_String('output_scalarfield_filename')
 
     end subroutine TEarlyQuintessence_ReadParams
 
