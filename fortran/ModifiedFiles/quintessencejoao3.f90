@@ -790,6 +790,10 @@
     quintessence%potentialparams(1) = Ini%Read_Double('potentialparam1', 0.d0)
     quintessence%potentialparams(2) = Ini%Read_Double('potentialparam2', 0.d0)
     quintessence%potentialparams(3) = Ini%Read_Double('potentialparam3', 0.d0)
+	
+	! Print here to test if works
+	print *, "Potential type:", quintessence%potential_type
+	print *, "Parameter 1:", quintessence%potentialparams(1)
 
     end subroutine field_getpotentialparams
 
