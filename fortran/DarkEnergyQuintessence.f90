@@ -291,7 +291,8 @@
     integer deriv
     real(dl) theta, costheta
     real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2
-	real(dl) :: m
+	real(dl) :: m ! mass for the harmonic potential/ general power law
+	real(dl) :: alpha ! exponent for the generic power law V = M^(4-alpha)phi^alpha
 
 	select case (this%potential_type)
 	case(0)
@@ -306,7 +307,7 @@
 		    costheta = cos(theta)
 		    Vofphi = units*this%m**2*this%n*(1 - costheta)**(this%n-1)*(this%n*(1+costheta) -1)
 		end if
-	case(1)
+	case(1) ! Harmonic potential
 		m = this%potentialparams(1)
 		if (deriv==0) then
 		    Vofphi = m**2*phi**2/2
@@ -314,6 +315,16 @@
 		    Vofphi = m**2*phi
 		else if (deriv ==2) then
 			Vofphi = m**2
+		end if
+	case(2) ! Power law potential
+		m = this%potentialparams(1)
+		alpha = this%potentialparams(2)
+		if (deriv==0) then
+		    Vofphi = m**(4._dl-alpha)*abs(phi)**alpha
+		else if (deriv ==1) then
+		    Vofphi = sign(1._dl, phi)*m**(4._dl-alpha)*alpha*abs(phi)**(alpha-1._dl)
+		else if (deriv ==2) then
+			Vofphi = sign(1._dl,phi)*m**(4._dl-alpha)*alpha*(alpha-1._dl)*abs(phi)**(alpha-2._dl)
 		end if
 	end select
     end function TEarlyQuintessence_VofPhi
@@ -418,7 +429,7 @@
 
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
-    initial_phi  = 0.01  !  0.3*grhom/m**3
+    initial_phi  = 1.d-7  !  0.3*grhom/m**3
     initial_phi2 = 100!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
@@ -440,7 +451,7 @@
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
     close(13)
-	stop
+	stop "outputted omega_de x initial_phi"
 	end if
 
 	
@@ -455,7 +466,7 @@
             write (*,*) 'om1, om2 = ', real(om1), real(om2)
             stop
         end if
-        do iter=1,100
+        do iter=1,1000
             deltaphi=initial_phi2-initial_phi
             phi =initial_phi + deltaphi/2
             initial_phidot =  astart*this%phidot_start(phi)
