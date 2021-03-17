@@ -38,6 +38,7 @@
         integer, private :: npoints_linear, npoints_log
         real(dl), private :: dloga, da, log_astart, max_a_log
         real(dl), private, dimension(:), allocatable :: ddphi_a, ddphidot_a
+		real(dl) :: omega_tol = 0.01
         class(CAMBdata), pointer, private :: State
     contains
     procedure :: Vofphi !V(phi) potential [+ any cosmological constant]
@@ -48,6 +49,7 @@
     procedure :: BackgroundDensityAndPressure => TQuintessence_BackgroundDensityAndPressure
     procedure :: EvolveBackground
     procedure :: EvolveBackgroundLog
+	procedure :: GetOmegaFromInitial
     procedure, private :: phidot_start => TQuintessence_phidot_start
     end type TQuintessence
 
@@ -65,8 +67,14 @@
         integer :: npoints = 5000 !baseline number of log a steps; will be increased if needed when there are oscillations
         integer :: min_steps_per_osc = 10
         real(dl), dimension(:), allocatable :: fde, ddfde
-		logical :: output_background_phi = .true. ! If the code should output a file with the scalar field evolution, phi(a).
-		character(len=50) :: output_background_phi_filename
+
+
+		!!!!! Variaveis Joao
+		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
+		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
+		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi
+		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
+		real(dl) :: potentialparams(2)
     contains
     procedure :: Vofphi => TEarlyQuintessence_VofPhi
     procedure :: Init => TEarlyQuintessence_Init
@@ -97,7 +105,7 @@
     call MpiStop('Quintessence classes must override to provide VofPhi')
     VofPhi = 0
     !if (deriv==0) then
-    !    Vofphi= norm*this%m*exp(-this%sigma_model*phi)
+    !    Vofphi= norm*this%m*exp(-this%sigma_model*phi) 
     !else if (deriv ==1) then
     !    Vofphi=-norm*this%m*sigma_model*exp(-this%sigma_model*phi)
     !else if (deriv ==2) then
@@ -180,7 +188,7 @@
     integer num
     real(dl) y(num),yprime(num)
     real(dl) a, a2, tot
-    real(dl) phi, grhode, phidot, adot
+    real(dl) phi, grhode, phidot, adot			
 
     a2=a**2
     phi = y(1)
@@ -283,19 +291,31 @@
     integer deriv
     real(dl) theta, costheta
     real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2
+	real(dl) :: m
 
-    ! Assume f = sqrt(kappa)*f_theory = f_theory/M_pl
-    ! m = m_theory/M_Pl
-    theta = phi/this%f
-    if (deriv==0) then
-        Vofphi = units*this%m**2*this%f**2*(1 - cos(theta))**this%n + this%frac_lambda0*this%State%grhov
-    else if (deriv ==1) then
-        Vofphi = units*this%m**2*this%f*this%n*(1 - cos(theta))**(this%n-1)*sin(theta)
-    else if (deriv ==2) then
-        costheta = cos(theta)
-        Vofphi = units*this%m**2*this%n*(1 - costheta)**(this%n-1)*(this%n*(1+costheta) -1)
-    end if
-
+	select case (this%potential_type)
+	case(0)
+		! Assume f = sqrt(kappa)*f_theory = f_theory/M_pl
+		! m = m_theory/M_Pl
+		theta = phi/this%f
+		if (deriv==0) then
+		    Vofphi = units*this%m**2*this%f**2*(1 - cos(theta))**this%n + this%frac_lambda0*this%State%grhov !V(phi) = m²f²(1-cos(phi/f))^n
+		else if (deriv ==1) then
+		    Vofphi = units*this%m**2*this%f*this%n*(1 - cos(theta))**(this%n-1)*sin(theta)
+		else if (deriv ==2) then
+		    costheta = cos(theta)
+		    Vofphi = units*this%m**2*this%n*(1 - costheta)**(this%n-1)*(this%n*(1+costheta) -1)
+		end if
+	case(1)
+		m = this%potentialparams(1)
+		if (deriv==0) then
+		    Vofphi = m**2*phi**2/2
+		else if (deriv ==1) then
+		    Vofphi = m**2*phi
+		else if (deriv ==2) then
+			Vofphi = m**2
+		end if
+	end select
     end function TEarlyQuintessence_VofPhi
 
 
@@ -318,6 +338,9 @@
     Type(TTimer) :: Timer
     Type(TNEWUOA) :: Minimize
     real(dl) log_params(2), param_min(2), param_max(2)
+
+	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi ! variables to find good initial conditions
+	logical :: OK
 
     !Make interpolation table, etc,
     !At this point massive neutrinos have been initialized
@@ -393,55 +416,70 @@
     end if
     allocate(phi_a(npoints),phidot_a(npoints), sampled_a(npoints), fde(npoints))
 
-    !initial_phi  = 10  !  0.3*grhom/m**3
-    !initial_phi2 = 100 !   6*grhom/m**3
-    !
-    !!           initial_phi  = 65 !  0.3*grhom/m**3
-    !!           initial_phi2 = 65 !   6*grhom/m**3
-    !
-    !astart=1d-9
-    !
-    !!See if initial conditions are giving correct omega_de now
-    !atol=1d-8
-    !initial_phidot =  astart*this%phidot_start(this%initial_phi)
-    !om1= this%GetOmegaFromInitial(astart,initial_phi,initial_phidot, atol)
-    !
-    !print*, State%omega_de, 'first trial:', om1
-    !if (abs(om1-State%omega_de > this%omega_tol)) then
-    !    !if not, do binary search in the interval
-    !    OK=.false.
-    !    initial_phidot = astart*this%phidot_start(initial_phi2)
-    !    om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
-    !    if (om1 > State%omega_de .or. om2 < State%omega_de) then
-    !        write (*,*) 'initial phi values must bracket required value.  '
-    !        write (*,*) 'om1, om2 = ', real(om1), real(om2)
-    !        stop
-    !    end if
-    !    do iter=1,100
-    !        deltaphi=initial_phi2-initial_phi
-    !        phi =initial_phi + deltaphi/2
-    !        initial_phidot =  astart*Quint_phidot_start(phi)
-    !        om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
-    !        if (om < State%omega_de) then
-    !            om1=om
-    !            initial_phi=phi
-    !        else
-    !            om2=om
-    !            initial_phi2=phi
-    !        end if
-    !        if (om2-om1 < 1d-3) then
-    !            OK=.true.
-    !            initial_phi = (initial_phi2+initial_phi)/2
-    !            if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
-    !            exit
-    !        end if
-    !
-    !    end do !iterations
-    !    if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
-    !
-    !end if !Find initial
 
-    initial_phi = this%theta_i*this%f
+	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
+    initial_phi  = 0.01  !  0.3*grhom/m**3
+    initial_phi2 = 100!   6*grhom/m**3
+    
+    !           initial_phi  = 65 !  0.3*grhom/m**3
+    !           initial_phi2 = 65 !   6*grhom/m**3
+    
+    astart=1d-9
+    atol=1d-8
+    initial_phidot =  astart*this%phidot_start(initial_phi)
+    om1= this%GetOmegaFromInitial(astart,initial_phi,initial_phidot, atol)
+
+	if (this%search_for_initialphi .eqv. .true.) then
+	!!!!!!!! Plotting Omega_de(initial_phi)
+	open(unit=13, file='initialphisearch.txt', form='formatted',status='replace')
+	initial_phi = 0.01
+	write(13, *) "initial_phi	Omega_de"
+	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
+	do i= 1,10000
+		initial_phi = initial_phi + 0.01
+		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
+	end do
+    close(13)
+	stop
+	end if
+
+	
+    print*, this%state%Omega_de, 'first trial:', om1
+    if (abs(om1 - this%state%Omega_de) > this%omega_tol) then
+        !if not, do binary search in the interval
+        OK=.false.
+        initial_phidot = astart*this%phidot_start(initial_phi2)
+        om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
+        if (om1 > this%state%Omega_de .or. om2 < this%state%Omega_de) then
+            write (*,*) 'initial phi tentative values must bracket required value.  '
+            write (*,*) 'om1, om2 = ', real(om1), real(om2)
+            stop
+        end if
+        do iter=1,100
+            deltaphi=initial_phi2-initial_phi
+            phi =initial_phi + deltaphi/2
+            initial_phidot =  astart*this%phidot_start(phi)
+            om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
+            if (om < this%state%Omega_de) then
+                om1=om
+                initial_phi=phi
+            else
+                om2=om
+                initial_phi2=phi
+            end if
+            if (om2-om1 < 1d-3) then
+                OK=.true.
+                initial_phi = (initial_phi2+initial_phi)/2
+                if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
+                exit
+            end if
+    
+        end do !iterations
+        if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
+    
+    end if !Find initial
+
+    !initial_phi = 1d-5 ! The code came with an initial value of 0.15Mpl
 
     y(1)=initial_phi
     initial_phidot =  this%astart*this%phidot_start(initial_phi)
@@ -544,7 +582,7 @@
             max_ix = ix-1
         end if
     end do
-
+	close(50)
     call spline(this%sampled_a,this%phi_a,tot_points,splZero,splZero,this%ddphi_a)
     call spline(this%sampled_a,this%phidot_a,tot_points,splZero,splZero,this%ddphidot_a)
     call spline(this%sampled_a,this%fde,tot_points,splZero,splZero,this%ddfde)
@@ -747,9 +785,14 @@
 
     call this%TDarkEnergyModel%ReadParams(Ini)
 
+	! Should CAMB output phi(a)? In which file?
 	this%output_background_phi = Ini%Read_Logical('output_scalarfield')
-	print *, "Ini file read successfully, output_scalarfield is", this%output_background_phi
 	this%output_background_phi_filename = Ini%Read_String('output_scalarfield_filename')
+
+	! Reading potential type and parameters
+	this%potential_type = Ini%Read_Int('potentialtype', 0)
+	this%potentialparams(1) = Ini%Read_Double('potentialparam1', 0._dl)
+	this%potentialparams(2) = Ini%Read_Double('potentialparam2', 0._dl)
 
     end subroutine TEarlyQuintessence_ReadParams
 
@@ -773,22 +816,22 @@
     end subroutine TEarlyQuintessence_SelfPointer
 
 
-    !real(dl) function GetOmegaFromInitial(this, astart,phi,phidot,atol)
-    !!Get omega_de today given particular conditions phi and phidot at a=astart
-    !class(TQuintessence) :: this
-    !real(dl), intent(IN) :: astart, phi,phidot, atol
-    !integer, parameter ::  NumEqs=2
-    !real(dl) c(24),w(NumEqs,9), y(NumEqs), ast
-    !integer ind, i
-    !
-    !ast=astart
-    !ind=1
-    !y(1)=phi
-    !y(2)=phidot*astart**2
-    !call dverk(this,NumEqs,EvolveBackground,ast,y,1._dl,atol,ind,c,NumEqs,w)
-    !call EvolveBackground(this,NumEqs,1._dl,y,w(:,1))
-    !
-    !GetOmegaFromInitial=(0.5d0*y(2)**2 + Vofphi(y(1),0))/this%State%grhocrit !(3*adot**2)
-    !
-    !end function GetOmegaFromInitial
+    real(dl) function GetOmegaFromInitial(this, astart,phi,phidot,atol)
+    !Get Omega_de today given particular conditions phi and phidot at a=astart
+    class(TQuintessence) :: this
+    real(dl), intent(IN) :: astart, phi,phidot, atol
+    integer, parameter ::  NumEqs=2
+    real(dl) c(24),w(NumEqs,9), y(NumEqs), ast
+    integer ind, i
+    
+    ast=astart
+    ind=1
+    y(1)=phi
+    y(2)=phidot*astart**2
+    call dverk(this,NumEqs,EvolveBackground,ast,y,1._dl,atol,ind,c,NumEqs,w)
+    call EvolveBackground(this,NumEqs,1._dl,y,w(:,1))
+    
+    GetOmegaFromInitial=(0.5d0*y(2)**2 + this%Vofphi(y(1),0))/this%State%grhocrit !(3*adot**2)
+    
+    end function GetOmegaFromInitial
     end module Quintessence
