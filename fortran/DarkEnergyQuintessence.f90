@@ -316,7 +316,7 @@
 		else if (deriv ==2) then
 			Vofphi = m**2
 		end if
-	case(2) ! Power law potential
+	case(2) ! Power law potential M^(4-n)|phi|^3
 		m = this%potentialparams(1)
 		alpha = this%potentialparams(2)
 		if (deriv==0) then
