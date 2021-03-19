@@ -72,7 +72,7 @@
 		!!!!! Variaveis Joao
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi
+		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -295,7 +295,7 @@
 	real(dl) :: alpha ! exponent for the generic power law V = M^(4-alpha)phi^alpha
 
 	select case (this%potential_type)
-	case(0)
+	case(0) ! Early quintessence
 		! Assume f = sqrt(kappa)*f_theory = f_theory/M_pl
 		! m = m_theory/M_Pl
 		theta = phi/this%f
@@ -307,6 +307,7 @@
 		    costheta = cos(theta)
 		    Vofphi = units*this%m**2*this%n*(1 - costheta)**(this%n-1)*(this%n*(1+costheta) -1)
 		end if
+
 	case(1) ! Harmonic potential
 		m = this%potentialparams(1)
 		if (deriv==0) then
@@ -316,7 +317,39 @@
 		else if (deriv ==2) then
 			Vofphi = m**2
 		end if
-	case(2) ! Power law potential M^(4-n)|phi|^3
+
+	case(2)  ! Cubic potential, V(phi) = m*phi^3/3
+		m = this%potentialparams(1)
+		if (phi >= 0) then
+			if (deriv==0) then
+				Vofphi = units*m*phi**3/3
+			else if (deriv ==1) then
+				Vofphi = units*m*phi**2
+			else if (deriv ==2) then
+				Vofphi = units*2*m*phi
+			end if
+		end if
+		if (phi < 0) then
+			if (deriv==0) then
+				Vofphi = -m*phi**3/3
+			else if (deriv ==1) then
+				Vofphi = -m*phi**2
+			else if (deriv ==2) then
+				Vofphi = -2*m*phi
+			end if
+		end if
+
+	case(3) ! Inverse potential, V(phi) = M^5*phi^(-1)
+		m = this%potentialparams(1)
+		if (deriv==0) then
+			Vofphi = m/phi
+		else if (deriv ==1) then
+			Vofphi = -m/phi**2
+		else if (deriv ==2) then
+			Vofphi = 2*m/phi**3
+		end if
+
+	case(10) ! Power law potential M^(4-n)|phi|^n not working
 		m = this%potentialparams(1)
 		alpha = this%potentialparams(2)
 		if (deriv==0) then
@@ -350,8 +383,9 @@
     Type(TNEWUOA) :: Minimize
     real(dl) log_params(2), param_min(2), param_max(2)
 
-	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi ! variables to find good initial conditions
+	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi_small, phi_large, phi, phistep ! variables to find good initial conditions
 	logical :: OK
+	real(dl) :: w_phi ! equation of state
 
     !Make interpolation table, etc,
     !At this point massive neutrinos have been initialized
@@ -429,8 +463,9 @@
 
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
-    initial_phi  = 1.d-7  !  0.3*grhom/m**3
-    initial_phi2 = 100!   6*grhom/m**3
+
+    initial_phi  = 0.0001  !  0.3*grhom/m**3
+    initial_phi2 = 1000!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
     !           initial_phi2 = 65 !   6*grhom/m**3
@@ -443,11 +478,12 @@
 	if (this%search_for_initialphi .eqv. .true.) then
 	!!!!!!!! Plotting Omega_de(initial_phi)
 	open(unit=13, file='initialphisearch.txt', form='formatted',status='replace')
-	initial_phi = 0.01
+	
 	write(13, *) "initial_phi	Omega_de"
 	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
-	do i= 1,10000
-		initial_phi = initial_phi + 0.01
+	phistep = (initial_phi2-initial_phi)/1000
+	do i= 1,1000
+		initial_phi = initial_phi + phistep
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
     close(13)
@@ -456,31 +492,41 @@
 
 	
     print*, this%state%Omega_de, 'first trial:', om1
-    if (abs(om1 - this%state%Omega_de) > this%omega_tol) then
+    if (abs(om1 - this%state%Omega_de) > this%omega_tol) then 
         !if not, do binary search in the interval
         OK=.false.
         initial_phidot = astart*this%phidot_start(initial_phi2)
         om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
-        if (om1 > this%state%Omega_de .or. om2 < this%state%Omega_de) then
+        if ((om1 < this%state%Omega_de .and. om2 < this%state%Omega_de) .or. &
+		 (om1 > this%state%Omega_de .and. om2 > this%state%Omega_de)) then
             write (*,*) 'initial phi tentative values must bracket required value.  '
             write (*,*) 'om1, om2 = ', real(om1), real(om2)
             stop
         end if
+		
+		if (om1 < this%state%Omega_de) then
+			phi_small = initial_phi
+			phi_large = initial_phi2
+		else
+			phi_small = initial_phi2
+			phi_large = initial_phi
+		end if
+
         do iter=1,1000
-            deltaphi=initial_phi2-initial_phi
-            phi =initial_phi + deltaphi/2
+            deltaphi=phi_large - phi_small
+            phi = phi_small + deltaphi/2
             initial_phidot =  astart*this%phidot_start(phi)
             om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
             if (om < this%state%Omega_de) then
                 om1=om
-                initial_phi=phi
+                phi_small=phi
             else
                 om2=om
-                initial_phi2=phi
+                phi_large=phi
             end if
             if (om2-om1 < 1d-3) then
                 OK=.true.
-                initial_phi = (initial_phi2+initial_phi)/2
+                initial_phi = (phi_small + phi_large)/2
                 if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
                 exit
             end if
@@ -509,7 +555,7 @@
 	! Modifying to output background phi(a)
 	if (this%output_background_phi .eqv. .true.) then
 		open(unit=50, file=this%output_background_phi_filename, form='formatted', status='replace')
-		write(50, *) "a		phi		phidot		fde"
+		write(50, *) "a		phi		phidot		fde		w"
 	end if
     do i=1, npoints-1
         aend = this%log_astart + this%dloga*i
@@ -534,13 +580,15 @@
 
         !Define fde as ratio of early dark energy density to total
         fde(ix) = 1/((this%state%grho_no_de(sampled_a(ix)) +  this%frac_lambda0*this%State%grhov*a2**2) &
-            /(a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
+            /(a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))) + 1)
+		! w_phi is the Eos parameter
+		w_phi = (phidot_a(ix)**2/2 - a2*this%Vofphi(phi_a(ix),0))/(phidot_a(ix)**2/2 + a2*this%Vofphi(phi_a(ix),0))
         if (max_ix==0 .and. ix > 2 .and. fde(ix)< fde(ix-1)) then
             max_ix = ix-1
         end if
 
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(4e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix)
+			write(50, '(5e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix), w_phi
 		end if
 		
 		! Also won't need this if
@@ -584,9 +632,9 @@
 
         this%fde(ix) = 1/((this%state%grho_no_de(aend) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
-
+		w_phi = (phidot_a(ix)**2/2 - a2*this%Vofphi(phi_a(ix),0))/(phidot_a(ix)**2/2 + a2*this%Vofphi(phi_a(ix),0))
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(4e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix)
+			write(50, '(5e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi
 		end if
 
         if (max_ix==0 .and. this%fde(ix)< this%fde(ix-1)) then
