@@ -72,7 +72,7 @@
 		!!!!! Variaveis Joao
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging
+		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -291,8 +291,8 @@
     integer deriv
     real(dl) theta, costheta
     real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2
-	real(dl) :: m ! mass for the harmonic potential/ general power law
-	real(dl) :: alpha ! exponent for the generic power law V = M^(4-alpha)phi^alpha
+	real(dl) :: m, alpha ! mass for the harmonic potential/ general power law
+	integer :: n ! exponent for the generic power law V = m * phi**n
 
 	select case (this%potential_type)
 	case(0) ! Early quintessence
@@ -322,11 +322,11 @@
 		m = this%potentialparams(1)
 		if (phi >= 0) then
 			if (deriv==0) then
-				Vofphi = units*m*phi**3/3
+				Vofphi = m*phi**3/3
 			else if (deriv ==1) then
-				Vofphi = units*m*phi**2
+				Vofphi = m*phi**2
 			else if (deriv ==2) then
-				Vofphi = units*2*m*phi
+				Vofphi = 2*m*phi
 			end if
 		end if
 		if (phi < 0) then
@@ -339,7 +339,7 @@
 			end if
 		end if
 
-	case(3) ! Inverse potential, V(phi) = M^5*phi^(-1)
+	case(3) ! Inverse potential, V(phi) = M^5*phi^(-1) - Has a freezing behavior
 		m = this%potentialparams(1)
 		if (deriv==0) then
 			Vofphi = m/phi
@@ -349,17 +349,51 @@
 			Vofphi = 2*m/phi**3
 		end if
 
-	case(10) ! Power law potential M^(4-n)|phi|^n not working
+	case(4) ! Inverse square potential, V(phi) = M^5*phi^(-2) - Has a freezing behavior
 		m = this%potentialparams(1)
-		alpha = this%potentialparams(2)
 		if (deriv==0) then
-		    Vofphi = m**(4._dl-alpha)*abs(phi)**alpha
+			Vofphi = m/phi**2
 		else if (deriv ==1) then
-		    Vofphi = sign(1._dl, phi)*m**(4._dl-alpha)*alpha*abs(phi)**(alpha-1._dl)
+			Vofphi = -2*m/phi**3
 		else if (deriv ==2) then
-			Vofphi = sign(1._dl,phi)*m**(4._dl-alpha)*alpha*(alpha-1._dl)*abs(phi)**(alpha-2._dl)
+			Vofphi = 6*m/phi**4
+		end if
+
+	case(5)  ! General power law potential, V(phi) = m * phi**n
+		m = this%potentialparams(1)
+		n = int(this%potentialparams(2))
+		if (phi >= 0) then
+			if (deriv==0) then
+				Vofphi = m*phi**n
+			else if (deriv ==1) then
+				Vofphi = n*m*phi**(n-1)
+			else if (deriv ==2) then
+				Vofphi = n*(n-1)*m*phi**(n-2)
+			end if
+		end if
+		if (modulo(n,2) == 0) then
+			if (phi < 0) then
+				if (deriv==0) then
+					Vofphi = m*phi**n
+				else if (deriv ==1) then
+					Vofphi = n*m*phi**(n-1)
+				else if (deriv ==2) then
+					Vofphi = n*(n-1)*m*phi**(n-2)
+				end if
+			end if
+		else
+			if (phi < 0) then
+				if (deriv==0) then
+					Vofphi = -m*phi**n
+				else if (deriv ==1) then
+					Vofphi = -n*m*phi**(n-1)
+				else if (deriv ==2) then
+					Vofphi = -n*(n-1)*m*phi**(n-2)
+				end if
+			end if
 		end if
 	end select
+
     end function TEarlyQuintessence_VofPhi
 
 
@@ -384,6 +418,7 @@
     real(dl) log_params(2), param_min(2), param_max(2)
 
 	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi_small, phi_large, phi, phistep ! variables to find good initial conditions
+	real(dl) :: om_small, om_large
 	logical :: OK
 	real(dl) :: w_phi ! equation of state
 
@@ -464,7 +499,7 @@
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
 
-    initial_phi  = 0.0001  !  0.3*grhom/m**3
+    initial_phi  = 1.d-6  !  0.3*grhom/m**3
     initial_phi2 = 1000!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
@@ -506,10 +541,14 @@
 		
 		if (om1 < this%state%Omega_de) then
 			phi_small = initial_phi
+			om_small = om1
 			phi_large = initial_phi2
+			om_large = om2
 		else
 			phi_small = initial_phi2
+			om_small = om2
 			phi_large = initial_phi
+			om_large = om1
 		end if
 
         do iter=1,1000
@@ -518,13 +557,13 @@
             initial_phidot =  astart*this%phidot_start(phi)
             om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
             if (om < this%state%Omega_de) then
-                om1=om
+                om_small=om
                 phi_small=phi
             else
-                om2=om
+                om_large=om
                 phi_large=phi
             end if
-            if (om2-om1 < 1d-3) then
+            if (abs(om_large-om_small) < 1d-3) then
                 OK=.true.
                 initial_phi = (phi_small + phi_large)/2
                 if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
