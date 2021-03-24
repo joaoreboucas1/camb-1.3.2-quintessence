@@ -290,7 +290,7 @@
     real(dl) phi,Vofphi
     integer deriv
     real(dl) theta, costheta
-    real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2
+    real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2 from natural units
 	real(dl) :: m, alpha ! mass for the harmonic potential/ general power law
 	integer :: n ! exponent for the generic power law V = m * phi**n
 
