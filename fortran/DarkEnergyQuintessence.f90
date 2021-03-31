@@ -295,6 +295,7 @@
     real(dl), parameter :: units = MPC_in_sec**2 /Tpl**2  !convert to units of 1/Mpc^2 from natural units
 	real(dl) :: m, alpha ! mass for the harmonic potential/ general power law
 	integer :: n ! exponent for the generic power law V = m * phi**n
+	real(dl) :: V_0, beta, u
 
 	select case (this%potential_type)
 	case(0) ! Early quintessence
@@ -394,6 +395,19 @@
 				end if
 			end if
 		end if
+
+	case(6) ! Model 1 from arxiv:1810.08586, a hyperbolic cosine well V(phi) = V_0 * cosh(beta * (phi/Mpl)**u)
+		V_0 = 1
+		beta = 6
+		u = 1
+		if (deriv==0) then
+			Vofphi = units * V_0 * cosh(beta*phi**u)
+		else if (deriv ==1) then
+			Vofphi = units * V_0 * sinh(beta * phi**u) * beta * u * phi**(u-1)
+		else if (deriv ==2) then
+			Vofphi = V_0 * beta * u * (cosh(beta * phi**u) * beta * u * phi**(2*(u-1)) + sinh(beta * phi**u) * (u-1) * phi**(u-2))
+		end if
+
 	end select
 
     end function TEarlyQuintessence_VofPhi
@@ -501,8 +515,8 @@
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
 
-    initial_phi  = 1.d-6  !  0.3*grhom/m**3
-    initial_phi2 = 1000!   6*grhom/m**3
+    initial_phi  = 1.d-10  !  0.3*grhom/m**3
+    initial_phi2 = 1.d-5!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
     !           initial_phi2 = 65 !   6*grhom/m**3
@@ -519,7 +533,7 @@
 	write(13, *) "initial_phi	Omega_de"
 	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	phistep = (initial_phi2-initial_phi)/1000
-	do i= 1,1000
+	do i= 1,100000
 		initial_phi = initial_phi + phistep
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
@@ -538,7 +552,7 @@
 		 (om1 > this%state%Omega_de .and. om2 > this%state%Omega_de)) then
             write (*,*) 'initial phi tentative values must bracket required value.  '
             write (*,*) 'om1, om2 = ', real(om1), real(om2)
-            stop
+            !stop
         end if
 		
 		if (om1 < this%state%Omega_de) then
@@ -576,7 +590,7 @@
         if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
     
     end if !Find initial
-
+	initial_phi = 0.7
     !initial_phi = 1d-5 ! The code came with an initial value of 0.15Mpl
 
     y(1)=initial_phi
@@ -596,7 +610,7 @@
 	! Modifying to output background phi(a)
 	if (this%output_background_phi .eqv. .true.) then
 		open(unit=50, file=this%output_background_phi_filename, form='formatted', status='replace')
-		write(50, *) "a		phi		phidot		fde		w"
+		write(50, *) "a		phi		phidot		fde		w	1+z"
 	end if
     do i=1, npoints-1
         aend = this%log_astart + this%dloga*i
@@ -629,7 +643,7 @@
         end if
 
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(5e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix), w_phi
+			write(50, '(6e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix), w_phi, 1._dl/sampled_a(ix)
 		end if
 		
 		! Also won't need this if
@@ -675,7 +689,7 @@
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
 		w_phi = (phidot_a(ix)**2/2 - a2*this%Vofphi(phi_a(ix),0))/(phidot_a(ix)**2/2 + a2*this%Vofphi(phi_a(ix),0))
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(5e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi
+			write(50, '(6e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi, 1._dl/this%sampled_a(ix)
 		end if
 
         if (max_ix==0 .and. this%fde(ix)< this%fde(ix-1)) then
