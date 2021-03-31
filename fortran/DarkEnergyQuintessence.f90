@@ -17,6 +17,7 @@
     !It works backwards, in that it assumes Omega_de is Omega_Q today, then does a binary search on the
     !initial conditions to find what is required to give that Omega_Q today after evolution.
 
+
     module Quintessence
     use DarkEnergyInterface
     use results
@@ -397,7 +398,7 @@
 		end if
 
 	case(6) ! Model 1 from arxiv:1810.08586, a hyperbolic cosine well V(phi) = V_0 * cosh(beta * (phi/Mpl)**u)
-		V_0 = 1
+		V_0 = 83.d-121
 		beta = 6
 		u = 1
 		if (deriv==0) then
@@ -413,7 +414,7 @@
     end function TEarlyQuintessence_VofPhi
 
 
-    subroutine TEarlyQuintessence_Init(this, State)
+    subroutine TEarlyQuintessence_Init(this, State) ! Reintroduce binary search later
     use Powell
     class(TEarlyQuintessence), intent(inout) :: this
     class(TCAMBdata), intent(in), target :: State
@@ -590,7 +591,7 @@
         if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
     
     end if !Find initial
-	initial_phi = 0.7
+	initial_phi = 1.d-3
     !initial_phi = 1d-5 ! The code came with an initial value of 0.15Mpl
 
     y(1)=initial_phi
