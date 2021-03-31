@@ -63,6 +63,7 @@
         real(dl) :: theta_i = 3.1_dl !initial value of phi/f
         real(dl) :: frac_lambda0 = 0._dl !fraction of dark energy density that is cosmological constant today
         logical :: use_zc = .false. !adjust m to fit zc
+		
         real(dl) :: zc, fde_zc !readshift for peak f_de and f_de at that redshift
         integer :: npoints = 5000 !baseline number of log a steps; will be increased if needed when there are oscillations
         integer :: min_steps_per_osc = 10
@@ -72,7 +73,7 @@
 		!!!!! Variaveis Joao
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging
+		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -284,7 +285,8 @@
 
     function TEarlyQuintessence_VofPhi(this, phi, deriv) result(VofPhi)
     !The input variable phi is sqrt(8*Pi*G)*psi
-    !Returns (8*Pi*G)^(1-deriv/2)*d^{deriv}V(psi)/d^{deriv}psi evaluated at psi
+    !Returns (8*Pi*G)^(1-deriv/2)*d^{deriv}V(psi)/d^{deriv}psi evaluated at psi (the (8*pi*G)^(1-deriv/2) term is because of the chain rule, since the differentiation we are
+	!performing is in the variable (phi/Mpl) = (8*pi*G)^(1/2)*phi
     !return result is in 1/Mpc^2 units [so times (Mpc/c)^2 to get units in 1/Mpc^2]
     class(TEarlyQuintessence) :: this
     real(dl) phi,Vofphi
@@ -297,7 +299,7 @@
 	select case (this%potential_type)
 	case(0) ! Early quintessence
 		! Assume f = sqrt(kappa)*f_theory = f_theory/M_pl
-		! m = m_theory/M_Pl
+		! m = m_theory/M_Pl so m is in Mpl...
 		theta = phi/this%f
 		if (deriv==0) then
 		    Vofphi = units*this%m**2*this%f**2*(1 - cos(theta))**this%n + this%frac_lambda0*this%State%grhov !V(phi) = m²f²(1-cos(phi/f))^n
