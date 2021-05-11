@@ -57,7 +57,7 @@
     ! Specific implementation for early quintessence + cosmologial constant, assuming the early component
     ! energy density fraction is negligible at z=0.
     ! The specific parameterization of the potential implemented is the axion model of arXiv:1908.06995
-    type, extends(TQuintessence) :: TEarlyQuintessence
+    type, extends(TQuintessence) :: TEarlyQuintessence ! Can rename later
         real(dl) :: n = 3._dl
         real(dl) :: f =0.05 ! sqrt(8*pi*G)*f
         real(dl) :: m = 5d-54 !m in reduced Planck mass units
@@ -71,7 +71,7 @@
         real(dl), dimension(:), allocatable :: fde, ddfde
 
 
-		!!!!! Variaveis Joao
+		!!!!! My variables for quintessence
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
 		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
@@ -192,16 +192,19 @@
     real(dl) a, a2, tot
     real(dl) phi, grhode, phidot, adot			
 
-    a2=a**2
+    a2=a**2	! Dots denote derivatives with respect to 
     phi = y(1)
     phidot = y(2)/a2
 
-    grhode=a2*(0.5d0*phidot**2 + a2*this%Vofphi(phi,0))
+    grhode=a2*(0.5d0*phidot**2 + a2*this%Vofphi(phi,0)) ! This is 8*pi*G*a^4*rho. Normally, this would be 8*pi*G*a^4(psi'^2/2a^2 + V). But putting the 8*pi*G factor inside, then:
+														! grhode = a^2*(phi'^2/2a^2 + 8*pi*G*V), where psi is the field in Mpc units and phi is the field in natural units
+														! Vofphi(phi,0) already returns 8*pi*G*V.
+														! Finally, remember that the Friedmann equation is a' = a^2 * sqrt(8*pi*G*rho/3), which is written down below
     tot = this%state%grho_no_de(a) + grhode
 
     adot=sqrt(tot/3.0d0)
-    yprime(1)=phidot/adot !d phi /d a
-    yprime(2)= -a2**2*this%Vofphi(phi,1)/adot
+    yprime(1)=phidot/adot ! d phi /d a
+    yprime(2)= -a2**2*this%Vofphi(phi,1)/adot		! Is this right? Check!!
 
     end subroutine EvolveBackground
 
@@ -286,9 +289,16 @@
 
     function TEarlyQuintessence_VofPhi(this, phi, deriv) result(VofPhi)
     !The input variable phi is sqrt(8*Pi*G)*psi
-    !Returns (8*Pi*G)^(1-deriv/2)*d^{deriv}V(psi)/d^{deriv}psi evaluated at psi (the (8*pi*G)^(1-deriv/2) term is because of the chain rule, since the differentiation we are
-	!performing is in the variable (phi/Mpl) = (8*pi*G)^(1/2)*phi)
+    !Returns (8*Pi*G)^(1-deriv/2)*d^{deriv}V(psi)/d^{deriv}psi evaluated at psi
+	!(the (8*pi*G)^(1-deriv/2) term is because of the chain rule, since the differentiation we are performing is in the variable (phi/Mpl) = (8*pi*G)^(1/2)*phi)
     !return result is in 1/Mpc^2 units [so times (Mpc/c)^2 to get units in 1/Mpc^2]
+
+	! Recipe to input your potential:
+	! 1. Write your potential in natural units (hbar = 8*Pi*G = c = 1). The field phi has units of mass and the potential has units of mass^4
+	! 2. Calculate the derivatives in natural units (d/d(phi))
+	! 3. Multiply your result by units and you're done!
+	! Again, this function outputs (8*pi*G)^(1-d/2)V^(d)(psi), but the module is written knowing this. Check BackgroundEvolve and PerturbationEvolve
+
     class(TEarlyQuintessence) :: this
     real(dl) phi,Vofphi
     integer deriv
