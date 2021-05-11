@@ -286,7 +286,7 @@
     function TEarlyQuintessence_VofPhi(this, phi, deriv) result(VofPhi)
     !The input variable phi is sqrt(8*Pi*G)*psi
     !Returns (8*Pi*G)^(1-deriv/2)*d^{deriv}V(psi)/d^{deriv}psi evaluated at psi (the (8*pi*G)^(1-deriv/2) term is because of the chain rule, since the differentiation we are
-	!performing is in the variable (phi/Mpl) = (8*pi*G)^(1/2)*phi
+	!performing is in the variable (phi/Mpl) = (8*pi*G)^(1/2)*phi)
     !return result is in 1/Mpc^2 units [so times (Mpc/c)^2 to get units in 1/Mpc^2]
     class(TEarlyQuintessence) :: this
     real(dl) phi,Vofphi
