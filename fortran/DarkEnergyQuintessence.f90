@@ -74,7 +74,7 @@
 		!!!!! My variables for quintessence
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
+		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -325,11 +325,11 @@
 	case(1) ! Harmonic potential
 		m = this%potentialparams(1)
 		if (deriv==0) then
-		    Vofphi = m**2*phi**2/2
+		    Vofphi = units*m**2*phi**2/2
 		else if (deriv ==1) then
-		    Vofphi = m**2*phi
+		    Vofphi = units*m**2*phi
 		else if (deriv ==2) then
-			Vofphi = m**2
+			Vofphi = units*m**2
 		end if
 
 	case(2)  ! Cubic potential, V(phi) = m*phi^3/3
@@ -444,7 +444,7 @@
     Type(TNEWUOA) :: Minimize
     real(dl) log_params(2), param_min(2), param_max(2)
 
-	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi_small, phi_large, phi, phistep ! variables to find good initial conditions
+	real(dl) :: astart, atol, deltaphi, initial_phi2, om, om1, om2, phi_small, phi_large, phi, phistep, initialexp ! variables to find good initial conditions
 	real(dl) :: om_small, om_large
 	logical :: OK
 	real(dl) :: w_phi ! equation of state
@@ -526,8 +526,8 @@
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
 
-    initial_phi  = 1.d-10  !  0.3*grhom/m**3
-    initial_phi2 = 1.d-5!   6*grhom/m**3
+    initial_phi  = 1.d-120  !  0.3*grhom/m**3
+    initial_phi2 = 1.d-5	!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
     !           initial_phi2 = 65 !   6*grhom/m**3
@@ -539,13 +539,15 @@
 
 	if (this%search_for_initialphi .eqv. .true.) then
 	!!!!!!!! Plotting Omega_de(initial_phi)
-	open(unit=13, file='initialphisearch.txt', form='formatted',status='replace')
+	open(unit=13, file='initialphisearch2.txt', form='formatted',status='replace')
 	
 	write(13, *) "initial_phi	Omega_de"
 	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	phistep = (initial_phi2-initial_phi)/1000
-	do i= 1,100000
-		initial_phi = initial_phi + phistep
+	initialexp = -120._dl
+	! print *, MPC_in_sec**2 /Tpl**2
+	do i= 1,50
+		initial_phi = 1._dl * 10._dl**(initialexp + i)
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
     close(13)
