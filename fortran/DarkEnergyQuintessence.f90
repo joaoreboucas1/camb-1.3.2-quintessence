@@ -74,7 +74,7 @@
 		!!!!! My variables for quintessence
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
+		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -526,8 +526,8 @@
 
 	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
 
-    initial_phi  = 1.d-120  !  0.3*grhom/m**3
-    initial_phi2 = 1.d-5	!   6*grhom/m**3
+    initial_phi  = 1.d-80  !  0.3*grhom/m**3
+    initial_phi2 = 100	!   6*grhom/m**3
     
     !           initial_phi  = 65 !  0.3*grhom/m**3
     !           initial_phi2 = 65 !   6*grhom/m**3
@@ -544,9 +544,9 @@
 	write(13, *) "initial_phi	Omega_de"
 	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	phistep = (initial_phi2-initial_phi)/1000
-	initialexp = -120._dl
+	initialexp = -100._dl
 	! print *, MPC_in_sec**2 /Tpl**2
-	do i= 1,50
+	do i= 1,150
 		initial_phi = 1._dl * 10._dl**(initialexp + i)
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
@@ -603,7 +603,7 @@
         if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
     
     end if !Find initial
-	initial_phi = 1.d-3
+	!initial_phi = 1.d-3
     !initial_phi = 1d-5 ! The code came with an initial value of 0.15Mpl
 
     y(1)=initial_phi
