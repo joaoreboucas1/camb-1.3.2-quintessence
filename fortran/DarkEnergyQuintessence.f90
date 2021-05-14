@@ -74,7 +74,8 @@
 		!!!!! My variables for quintessence
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
+		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
+		logical :: outputinitialphivsm = .false. ! Outputting initial_phi for different values of m
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
     contains
@@ -424,7 +425,7 @@
     end function TEarlyQuintessence_VofPhi
 
 
-    subroutine TEarlyQuintessence_Init(this, State) ! Reintroduce binary search later
+    subroutine TEarlyQuintessence_Init(this, State)
     use Powell
     class(TEarlyQuintessence), intent(inout) :: this
     class(TCAMBdata), intent(in), target :: State
@@ -524,13 +525,10 @@
     allocate(phi_a(npoints),phidot_a(npoints), sampled_a(npoints), fde(npoints))
 
 
-	! Set initial conditions to give correct Omega_de now, I think it won't work for Early Quintessence so I should put a better potential
-
-    initial_phi  = 1.d-80  !  0.3*grhom/m**3
-    initial_phi2 = 100	!   6*grhom/m**3
+	! Set initial conditions to give correct Omega_de now
+    initial_phi  = 1.d-20  !  Remember that this is in Mpl
+    initial_phi2 = 10
     
-    !           initial_phi  = 65 !  0.3*grhom/m**3
-    !           initial_phi2 = 65 !   6*grhom/m**3
     
     astart=1d-9
     atol=1d-8
@@ -538,36 +536,48 @@
     om1= this%GetOmegaFromInitial(astart,initial_phi,initial_phidot, atol)
 
 	if (this%search_for_initialphi .eqv. .true.) then
-	!!!!!!!! Plotting Omega_de(initial_phi)
+	! This code bit outputs omega_phi in terms of initial_phi, in order to check if there are ambiguities in the initial conditions
 	open(unit=13, file='initialphisearch2.txt', form='formatted',status='replace')
 	
 	write(13, *) "initial_phi	Omega_de"
 	write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
-	phistep = (initial_phi2-initial_phi)/1000
+	phistep = 1.d-6
 	initialexp = -100._dl
 	! print *, MPC_in_sec**2 /Tpl**2
-	do i= 1,150
-		initial_phi = 1._dl * 10._dl**(initialexp + i)
+	do i= 1,100
+		initial_phi = 0.0867 + phistep*i
 		write(13, '(2e15.6)') initial_phi, this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
 	end do
     close(13)
 	stop "outputted omega_de x initial_phi"
 	end if
-
 	
-    print*, this%state%Omega_de, 'first trial:', om1
+	if (this%outputinitialphivsm .eqv. .true.) then
+		call initialphivsparameters(this)
+		stop 'Outputted initial_phi x m'
+	end if
+
+		
+	! This code bit is the binary search: starting with a considerably huge window of initial_phi, we want to find
+	! the value that satisfies omega_phi = 1 - Omega_m - Omega_r - Omega_k. This is done by the bissection algorithm
+	
+    print*, 'Target omega_de: ', this%state%Omega_de, 'first trial:', om1
     if (abs(om1 - this%state%Omega_de) > this%omega_tol) then 
-        !if not, do binary search in the interval
+        ! If our initial guess is not good, enter the algorithm
         OK=.false.
         initial_phidot = astart*this%phidot_start(initial_phi2)
         om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
+
         if ((om1 < this%state%Omega_de .and. om2 < this%state%Omega_de) .or. &
 		 (om1 > this%state%Omega_de .and. om2 > this%state%Omega_de)) then
+			! The bissection algorithm only works if one of the window boundaries is below the required value and
+			! the other is above the required value
             write (*,*) 'initial phi tentative values must bracket required value.  '
             write (*,*) 'om1, om2 = ', real(om1), real(om2)
-            !stop
+            stop
         end if
 		
+		! I have adapted the algorithm because for some potentials, Omega_phi is a descending function of initial_phi
 		if (om1 < this%state%Omega_de) then
 			phi_small = initial_phi
 			om_small = om1
@@ -580,9 +590,9 @@
 			om_large = om1
 		end if
 
-        do iter=1,1000
-            deltaphi=phi_large - phi_small
-            phi = phi_small + deltaphi/2
+        do iter=1,100 ! Dividing the window in half 1000 times
+            deltaphi = phi_large - phi_small ! Window size
+            phi = phi_small + deltaphi/2 ! Middle value
             initial_phidot =  astart*this%phidot_start(phi)
             om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
             if (om < this%state%Omega_de) then
@@ -592,17 +602,18 @@
                 om_large=om
                 phi_large=phi
             end if
-            if (abs(om_large-om_small) < 1d-3) then
+            if (abs(om_large-om_small) < 1d-4) then ! When the window size gets smaller than this, we leave the algorithm
                 OK=.true.
                 initial_phi = (phi_small + phi_large)/2
-                if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
+                if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi, 'omega = ', this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
+				stop
                 exit
             end if
     
-        end do !iterations
-        if (.not. OK) stop 'Search for good intial conditions did not converge' !this shouldn't happen
+        end do
+        if (.not. OK) stop 'Search for good intial conditions did not converge' ! This should not happen
     
-    end if !Find initial
+    end if ! Leaving binary search algorithm
 	!initial_phi = 1.d-3
     !initial_phi = 1d-5 ! The code came with an initial value of 0.15Mpl
 
@@ -961,4 +972,72 @@
     GetOmegaFromInitial=(0.5d0*y(2)**2 + this%Vofphi(y(1),0))/this%State%grhocrit !(3*adot**2)
     
     end function GetOmegaFromInitial
+
+	subroutine initialphivsparameters(this)
+	! This function outputs initial_phi as a function of parameters
+	class(TEarlyQuintessence), intent(inout) :: this
+	integer :: i, iter
+	real(dl) :: phi, initial_phi, initial_phi2, phi_small, phi_large, om, om1, om2, om_small, om_large, initial_phidot, atol, deltaphi, astart
+	logical :: OK
+
+	atol = 1.d-8
+	astart = 1.d-7
+
+	open(unit=14, file="initialphixm.txt", form='formatted', status='replace')
+	
+	do i = -65,0
+	this%potentialparams(1) = 10.**(i)
+	initial_phi = 1.d-80
+	initial_phi2 = 100
+	om1 = this%GetOmegaFromInitial(astart,initial_phi,0._dl, atol)
+	print*, this%state%Omega_de, 'first trial:', om1
+		if (abs(om1 - this%state%Omega_de) > this%omega_tol) then 
+		    !if not, do binary search in the interval
+		    OK=.false.
+		    initial_phidot = astart*this%phidot_start(initial_phi2)
+		    om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
+		    if ((om1 < this%state%Omega_de .and. om2 < this%state%Omega_de) .or. &
+			 (om1 > this%state%Omega_de .and. om2 > this%state%Omega_de)) then
+		        write (*,*) 'initial phi tentative values must bracket required value.  '
+		        write (*,*) 'om1, om2 = ', real(om1), real(om2)
+		        !stop
+		    end if
+			
+			if (om1 < this%state%Omega_de) then
+				phi_small = initial_phi
+				om_small = om1
+				phi_large = initial_phi2
+				om_large = om2
+			else
+				phi_small = initial_phi2
+				om_small = om2
+				phi_large = initial_phi
+				om_large = om1
+			end if
+
+		    do iter=1,1000
+		        deltaphi=phi_large - phi_small
+		        phi = phi_small + deltaphi/2
+		        initial_phidot =  astart*this%phidot_start(phi)
+		        om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
+		        if (om < this%state%Omega_de) then
+		            om_small=om
+		            phi_small=phi
+		        else
+		            om_large=om
+		            phi_large=phi
+		        end if
+		        if (abs(om_large-om_small) < 1d-3) then
+		            OK=.true.
+		            initial_phi = (phi_small + phi_large)/2
+		            ! if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
+					write (14, '(2e16.6)') this%potentialparams(1), initial_phi
+		            exit
+		        end if
+			end do
+		end if
+	end do
+	close(14)
+	end subroutine initialphivsparameters
+	
     end module Quintessence
