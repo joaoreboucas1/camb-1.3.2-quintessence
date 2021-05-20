@@ -1166,6 +1166,8 @@
             grhoa2 = grhoa2 + rhonu * this%grhormass(nu_i)
         end do
     end if
+
+	end function grho_no_de
 	
 	function gpres_rad(this, a) result(gpresa2)
     !  Return 8*pi*G*rho_no_de*a**4 where rho_no_de includes everything except dark energy.

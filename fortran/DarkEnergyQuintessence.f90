@@ -74,7 +74,7 @@
 		!!!!! My variables for quintessence
 		logical :: output_background_phi = .false. ! If the code should output a file with the scalar field evolution, phi(a). This is determined by the inifile.
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
-		logical :: search_for_initialphi = .true. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
+		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
 		logical :: outputinitialphivsm = .false. ! Outputting initial_phi for different values of m
 		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
 		real(dl) :: potentialparams(2)
@@ -527,7 +527,7 @@
 
 	! Set initial conditions to give correct Omega_de now
     initial_phi  = 1.d-20  !  Remember that this is in Mpl
-    initial_phi2 = 10
+    initial_phi2 = 500
     
     
     astart=1d-9
@@ -590,7 +590,7 @@
 			om_large = om1
 		end if
 
-        do iter=1,100 ! Dividing the window in half 1000 times
+        do iter=1,200 ! Dividing the window in half 100 times
             deltaphi = phi_large - phi_small ! Window size
             phi = phi_small + deltaphi/2 ! Middle value
             initial_phidot =  astart*this%phidot_start(phi)
@@ -606,7 +606,7 @@
                 OK=.true.
                 initial_phi = (phi_small + phi_large)/2
                 if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi, 'omega = ', this%GetOmegaFromInitial(astart, initial_phi, 0._dl, atol)
-				stop
+				!stop
                 exit
             end if
     
