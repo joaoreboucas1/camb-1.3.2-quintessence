@@ -1,0 +1,14 @@
+Comments on this model:
+
+1. Initial values for different masses (in Mpl): alpha * phi**-1
+m	phi_0
+6 x 10^(-24)	9525
+5 x 10^(-24)	3826
+4 x 10^(-24) 	1253
+3 x 10^(-24) 	297
+2 x 10^(-24)	39 (the field rolls a little bit; if m greater than this, the field gets frozen and mimics lcdm)
+1 x 10^(-24)	0.9 (the field is rolling, starting to get some differences!!)
+9 x 10^(-25)	can't find initial conditions! there is a major jump in initial conditions...
+
+	phi**-2
+
