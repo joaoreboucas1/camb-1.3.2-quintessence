@@ -457,6 +457,7 @@
     !so grho_no_de can be used to get density and pressure of other components at scale factor a
 
     call this%TQuintessence%Init(State)
+	
 
     if (this%use_zc) then
         !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
@@ -528,8 +529,8 @@
 
 
 	! Set initial conditions to give correct Omega_de now
-    initial_phi  = 6.d-20  !  Remember that this is in Mpl
-    initial_phi2 = 1_dl
+    initial_phi  = 1._dl  !  Remember that this is in Mpl
+    initial_phi2 = 100._dl
     
     
     astart=1d-9
@@ -714,7 +715,7 @@
 
         this%fde(ix) = 1/((this%state%grho_no_de(aend) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
-		w_phi = (phidot_a(ix)**2/2 - a2*this%Vofphi(phi_a(ix),0))/(phidot_a(ix)**2/2 + a2*this%Vofphi(phi_a(ix),0))
+		w_phi = (0.5d0 * phidot_a(ix)**2 - a2*this%Vofphi(phi_a(ix),0))/(0.5d0 * phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
 			write(50, '(6e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi, 1._dl/this%sampled_a(ix)
 		end if
