@@ -262,6 +262,8 @@
     procedure :: Free => CAMBdata_Free
     procedure :: grho_no_de
 	procedure :: gpres_rad
+	procedure :: grho_matter
+	procedure :: grho_radiation
     procedure :: GetReionizationOptDepth
     procedure :: rofChi
     procedure :: cosfunc
@@ -1168,6 +1170,35 @@
     end if
 
 	end function grho_no_de
+
+	function grho_matter(this, a) result(grhoa2)
+    !  Return 8*pi*G*rho_no_de*a**4 where rho_no_de includes everything except dark energy.
+    class(CAMBdata) :: this
+    real(dl), intent(in) :: a
+    real(dl) grhoa2
+
+    grhoa2 = (this%grhoc + this%grhob) * a
+
+	end function grho_matter
+
+	function grho_radiation(this, a) result(grhoa2)
+    !  Return 8*pi*G*rho_no_de*a**4 where rho_no_de includes everything except dark energy.
+    class(CAMBdata) :: this
+    real(dl), intent(in) :: a
+    real(dl) grhoa2, rhonu
+	integer :: nu_i
+
+    grhoa2 = this%grhog + this%grhornomass
+
+    if (this%CP%Num_Nu_massive /= 0) then
+        !Get massive neutrino density relative to massless
+        do nu_i = 1, this%CP%nu_mass_eigenstates
+            call ThermalNuBack%rho(a * this%nu_masses(nu_i), rhonu)
+            grhoa2 = grhoa2 + rhonu * this%grhormass(nu_i)
+        end do
+    end if
+
+	end function grho_radiation
 	
 	function gpres_rad(this, a) result(gpresa2)
     !  Return 8*pi*G*rho_no_de*a**4 where rho_no_de includes everything except dark energy.

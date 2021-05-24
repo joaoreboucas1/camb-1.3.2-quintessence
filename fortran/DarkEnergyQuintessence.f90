@@ -451,6 +451,7 @@
 	real(dl) :: om_small, om_large
 	logical :: OK
 	real(dl) :: w_phi ! equation of state
+	real(dl) :: fmatter, frad
 
     !Make interpolation table, etc,
     !At this point massive neutrinos have been initialized
@@ -638,7 +639,7 @@
 	! Modifying to output background phi(a)
 	if (this%output_background_phi .eqv. .true.) then
 		open(unit=50, file=this%output_background_phi_filename, form='formatted', status='replace')
-		write(50, *) "a		phi		phidot		fde		w	1+z"
+		write(50, *) "a		phi		phidot		fde		w	1+z	fmatter	frad"
 	end if
     do i=1, npoints-1
         aend = this%log_astart + this%dloga*i
@@ -664,14 +665,19 @@
         !Define fde as ratio of early dark energy density to total
         fde(ix) = 1/((this%state%grho_no_de(sampled_a(ix)) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))) + 1)
-		! w_phi is the Eos parameter
+
+		fmatter = this%state%grho_matter(sampled_a(ix)) / (this%state%grho_no_de(sampled_a(ix)) + (a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))))
+
+		frad = this%state%grho_radiation(sampled_a(ix))/(this%state%grho_no_de(sampled_a(ix)) + (a2*(0.5d0* phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))))
+
+		! w_phi is the quintessence Eos parameter
 		w_phi = (phidot_a(ix)**2/2 - a2*this%Vofphi(phi_a(ix),0))/(phidot_a(ix)**2/2 + a2*this%Vofphi(phi_a(ix),0))
         if (max_ix==0 .and. ix > 2 .and. fde(ix)< fde(ix-1)) then
             max_ix = ix-1
         end if
 
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(6e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix), w_phi, 1._dl/sampled_a(ix)
+			write(50, '(8e16.6)') sampled_a(ix), phi_a(ix), phidot_a(ix), fde(ix), w_phi, 1._dl/sampled_a(ix), fmatter, frad
 		end if
 		
 		! Also won't need this if
@@ -715,9 +721,17 @@
 
         this%fde(ix) = 1/((this%state%grho_no_de(aend) +  this%frac_lambda0*this%State%grhov*a2**2) &
             /(a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(y(1),0))) + 1)
-		w_phi = (0.5d0 * phidot_a(ix)**2 - a2*this%Vofphi(phi_a(ix),0))/(0.5d0 * phidot_a(ix)**2 + a2*this%Vofphi(phi_a(ix),0))
+
+		w_phi = (0.5d0 * this%phidot_a(ix)**2 - a2*this%Vofphi(this%phi_a(ix),0))/(0.5d0 * this%phidot_a(ix)**2 + a2*this%Vofphi(this%phi_a(ix),0))
+
+
+
+		fmatter = this%state%grho_matter(this%sampled_a(ix)) / (this%state%grho_no_de(this%sampled_a(ix)) + (a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(this%phi_a(ix),0))))
+
+		frad = this%state%grho_radiation(this%sampled_a(ix))/(this%state%grho_no_de(this%sampled_a(ix)) + (a2*(0.5d0* this%phidot_a(ix)**2 + a2*this%Vofphi(this%phi_a(ix),0))))
+
 		if (this%output_background_phi .eqv. .true.) then ! Output background evolution
-			write(50, '(6e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi, 1._dl/this%sampled_a(ix)
+			write(50, '(8e16.6)') this%sampled_a(ix), this%phi_a(ix), this%phidot_a(ix), this%fde(ix), w_phi, 1._dl/this%sampled_a(ix), fmatter, frad
 		end if
 
         if (max_ix==0 .and. this%fde(ix)< this%fde(ix-1)) then

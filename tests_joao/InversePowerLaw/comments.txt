@@ -1,6 +1,6 @@
 Comments on this model:
 
-1. Initial values for different masses (in Mpl): alpha * phi**-1
+1. Initial values for different masses (in Mpl): V = units * m^5/phi
 m	phi_0
 6 x 10^(-24)	9525
 5 x 10^(-24)	3826
@@ -10,5 +10,4 @@ m	phi_0
 1 x 10^(-24)	0.9 (the field is rolling, starting to get some differences!!)
 9 x 10^(-25)	can't find initial conditions! there is a major jump in initial conditions...
 
-	phi**-2
 
