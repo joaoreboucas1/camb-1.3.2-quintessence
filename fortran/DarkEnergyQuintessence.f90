@@ -419,7 +419,7 @@
 		else if (deriv ==1) then
 			Vofphi = units * V_0 * sinh(beta * phi**u) * beta * u * phi**(u-1)
 		else if (deriv ==2) then
-			Vofphi = V_0 * beta * u * (cosh(beta * phi**u) * beta * u * phi**(2*(u-1)) + sinh(beta * phi**u) * (u-1) * phi**(u-2))
+			Vofphi = units * V_0 * beta * u * (cosh(beta * phi**u) * beta * u * phi**(2*(u-1)) + sinh(beta * phi**u) * (u-1) * phi**(u-2))
 		end if
 
 	end select
@@ -530,8 +530,8 @@
 
 
 	! Set initial conditions to give correct Omega_de now
-    initial_phi  = 1._dl  !  Remember that this is in Mpl
-    initial_phi2 = 100._dl
+    initial_phi  = 10._dl  !  Remember that this is in Mpl
+    initial_phi2 = 5000._dl
     
     
     astart=1d-9
