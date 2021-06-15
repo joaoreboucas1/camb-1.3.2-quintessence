@@ -76,8 +76,8 @@
 		character(len=50) :: output_background_phi_filename ! The name of the file mentioned above, also determined in the inifile
 		logical :: search_for_initialphi = .false. ! If the code should output a file with Omega_de x initial_phi. Good for debugging and testing potentials
 		logical :: outputinitialphivsm = .false. ! Outputting initial_phi for different values of m
-		integer :: potential_type = 0 ! 0 for the early quintessence, 1 for m²phi²/2
-		real(dl) :: potentialparams(2)
+		integer :: potential_type = 1 ! 0 for the early quintessence, 1 for m²phi²/2
+		real(dl) :: potentialparams = 3d-61
     contains
     procedure :: Vofphi => TEarlyQuintessence_VofPhi
     procedure :: Init => TEarlyQuintessence_Init
@@ -324,7 +324,7 @@
 		end if
 
 	case(1) ! Harmonic potential - thawing, oscillates between w = -1 and w = 1 at late times (averaging to w = 0)
-		m = this%potentialparams(1)
+		m = this%potentialparams
 		if (deriv==0) then
 		    Vofphi = units*m**2*phi**2/2
 		else if (deriv ==1) then
@@ -334,7 +334,7 @@
 		end if
 
 	case(2) ! Inverse potential, V(phi) = M^5*phi^(-1) - Has a freezing behavior
-		m = this%potentialparams(1)
+		m = this%potentialparams
 		if (deriv==0) then
 			Vofphi = units * m**5/phi
 		else if (deriv ==1) then
@@ -344,7 +344,7 @@
 		end if
 
 	case(3)  ! Cubic potential, V(phi) = m*phi^3/3
-		m = this%potentialparams(1)
+		m = this%potentialparams
 		if (phi >= 0) then
 			if (deriv==0) then
 				Vofphi = m*phi**3/3
@@ -367,7 +367,7 @@
 
 
 	case(4) ! Inverse square potential, V(phi) = M^5*phi^(-2) - Has a freezing behavior
-		m = this%potentialparams(1)
+		m = this%potentialparams
 		if (deriv==0) then
 			Vofphi = m/phi**2
 		else if (deriv ==1) then
@@ -377,8 +377,8 @@
 		end if
 
 	case(5)  ! General power law potential, V(phi) = m * phi**n
-		m = this%potentialparams(1)
-		n = int(this%potentialparams(2))
+		m = this%potentialparams
+		n = int(this%potentialparams)
 		if (phi >= 0) then
 			if (deriv==0) then
 				Vofphi = m*phi**n
@@ -458,7 +458,7 @@
     !so grho_no_de can be used to get density and pressure of other components at scale factor a
 
     call this%TQuintessence%Init(State)
-	
+	print *, "!", this%potentialparams, this%potential_type
 
     if (this%use_zc) then
         !Find underlying parameters m,f to give specified zc and fde_zc (peak early dark energy fraction)
@@ -530,8 +530,8 @@
 
 
 	! Set initial conditions to give correct Omega_de now
-    initial_phi  = 10._dl  !  Remember that this is in Mpl
-    initial_phi2 = 5000._dl
+    initial_phi  = 0.01_dl  !  Remember that this is in Mpl
+    initial_phi2 = 100._dl
     
     
     astart=1d-9
@@ -555,11 +555,6 @@
 	end do
     close(13)
 	stop "outputted omega_de x initial_phi"
-	end if
-	
-	if (this%outputinitialphivsm .eqv. .true.) then
-		call initialphivsparameters(this)
-		stop 'Outputted initial_phi x m'
 	end if
 
 		
@@ -947,8 +942,8 @@
 
 	! Reading potential type and parameters
 	this%potential_type = Ini%Read_Int('potentialtype', 0)
-	this%potentialparams(1) = Ini%Read_Double('potentialparam1', 0._dl)
-	this%potentialparams(2) = Ini%Read_Double('potentialparam2', 0._dl)
+	this%potentialparams = Ini%Read_Double('potentialparam1', 0._dl)
+	! this%potentialparams = Ini%Read_Double('potentialparam2', 0._dl)
 
     end subroutine TEarlyQuintessence_ReadParams
 
@@ -990,72 +985,5 @@
     GetOmegaFromInitial=(0.5d0*y(2)**2 + this%Vofphi(y(1),0))/this%State%grhocrit !(3*adot**2)
     
     end function GetOmegaFromInitial
-
-	subroutine initialphivsparameters(this)
-	! This function outputs initial_phi as a function of parameters
-	class(TEarlyQuintessence), intent(inout) :: this
-	integer :: i, iter
-	real(dl) :: phi, initial_phi, initial_phi2, phi_small, phi_large, om, om1, om2, om_small, om_large, initial_phidot, atol, deltaphi, astart
-	logical :: OK
-
-	atol = 1.d-8
-	astart = 1.d-7
-
-	open(unit=14, file="initialphixm.txt", form='formatted', status='replace')
-	
-	do i = -65,0
-	this%potentialparams(1) = 10.**(i)
-	initial_phi = 1.d-80
-	initial_phi2 = 100
-	om1 = this%GetOmegaFromInitial(astart,initial_phi,0._dl, atol)
-	print*, this%state%Omega_de, 'first trial:', om1
-		if (abs(om1 - this%state%Omega_de) > this%omega_tol) then 
-		    !if not, do binary search in the interval
-		    OK=.false.
-		    initial_phidot = astart*this%phidot_start(initial_phi2)
-		    om2= this%GetOmegaFromInitial(astart,initial_phi2,initial_phidot, atol)
-		    if ((om1 < this%state%Omega_de .and. om2 < this%state%Omega_de) .or. &
-			 (om1 > this%state%Omega_de .and. om2 > this%state%Omega_de)) then
-		        write (*,*) 'initial phi tentative values must bracket required value.  '
-		        write (*,*) 'om1, om2 = ', real(om1), real(om2)
-		        !stop
-		    end if
-			
-			if (om1 < this%state%Omega_de) then
-				phi_small = initial_phi
-				om_small = om1
-				phi_large = initial_phi2
-				om_large = om2
-			else
-				phi_small = initial_phi2
-				om_small = om2
-				phi_large = initial_phi
-				om_large = om1
-			end if
-
-		    do iter=1,1000
-		        deltaphi=phi_large - phi_small
-		        phi = phi_small + deltaphi/2
-		        initial_phidot =  astart*this%phidot_start(phi)
-		        om = this%GetOmegaFromInitial(astart,phi,initial_phidot,atol)
-		        if (om < this%state%Omega_de) then
-		            om_small=om
-		            phi_small=phi
-		        else
-		            om_large=om
-		            phi_large=phi
-		        end if
-		        if (abs(om_large-om_small) < 1d-3) then
-		            OK=.true.
-		            initial_phi = (phi_small + phi_large)/2
-		            ! if (FeedbackLevel > 0) write(*,*) 'phi_initial = ',initial_phi
-					write (14, '(2e16.6)') this%potentialparams(1), initial_phi
-		            exit
-		        end if
-			end do
-		end if
-	end do
-	close(14)
-	end subroutine initialphivsparameters
 	
     end module Quintessence

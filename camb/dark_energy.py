@@ -181,16 +181,20 @@ class EarlyQuintessence(Quintessence):
         ("min_steps_per_osc", c_int, "minimumum number of steps per background oscillation scale"),
         ("fde", AllocatableArrayDouble, "after initialized, the calculated backgroundearly dark energy "
                                         "fractions at sampled_a"),
-        ("__ddfde", AllocatableArrayDouble)
+        ("__ddfde", AllocatableArrayDouble),
+		("potential_type", c_int, "which potential i'm using"),
+        ("potentialparams", c_double, "potential parameter")
     ]
     _fortran_class_name_ = 'TEarlyQuintessence'
 
-    def set_params(self, n, f=0.05, m=5e-54, theta_i=0.0, use_zc=True, zc=None, fde_zc=None):
+    def set_params(self, n, f=0.05, m=5e-54, theta_i=0.0, use_zc=True, zc=None, fde_zc=None, potential_type=1, potentialparams=3e-61):
         self.n = n
         self.f = f
         self.m = m
         self.theta_i = theta_i
         self.use_zc = use_zc
+        self.potential_type = potential_type
+        self.potentialparams = potentialparams
         if use_zc:
             if zc is None or fde_zc is None:
                 raise ValueError("must set zc and fde_zc if using use_zc")
